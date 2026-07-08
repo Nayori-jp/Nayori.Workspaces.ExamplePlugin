@@ -20,7 +20,6 @@ class ExamplePluginServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Route::middleware('web')->group(__DIR__.'/routes/web.php');
-        $this->loadViewsFrom(__DIR__.'/resources/views', 'example-plugin');
         $this->loadMigrationsFrom(__DIR__.'/database/migrations');
     }
 }
