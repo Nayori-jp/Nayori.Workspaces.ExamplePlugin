@@ -3,14 +3,22 @@
 namespace Plugins\ExamplePlugin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Support\Crud\CrudResourceRegistry;
 use App\Support\Crud\ListFilters;
+use App\Support\Crud\WorkspaceVersion;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Plugins\ExamplePlugin\Models\ExampleRecord;
 
 class ExampleRecordController extends Controller
 {
+    public function __construct(protected CrudResourceRegistry $crudResources)
+    {
+    }
+
     public function index(Request $request): Response
     {
         $filters = ListFilters::fromRequest($request);
@@ -27,63 +35,8 @@ class ExampleRecordController extends Controller
 
         return Inertia::render('ExamplePlugin/Records/Index', [
             'filters' => $filters,
-            'crud' => [
-                'eyebrow' => 'Example Plugin',
-                'heading' => 'Example records',
-                'description' => 'This plugin demonstrates how future add-ons can declare one CRUD index definition instead of hand-writing list UI.',
-                'searchPlaceholder' => 'Search example records',
-                'emptyMessage' => 'No example records found.',
-                'columns' => [
-                    ['key' => 'name', 'label' => 'Name'],
-                    ['key' => 'slug', 'label' => 'Slug'],
-                    ['key' => 'summary', 'label' => 'Summary'],
-                    ['key' => 'status', 'label' => 'Status'],
-                ],
-                'statusOptions' => [
-                    ['value' => 'active', 'label' => 'Active'],
-                    ['value' => 'inactive', 'label' => 'Inactive'],
-                    ['value' => 'archived', 'label' => 'Archived'],
-                ],
-            ],
-            'rows' => $records->map(fn (ExampleRecord $record) => [
-                'id' => $record->id,
-                'cells' => [
-                    'name' => [
-                        'type' => 'link',
-                        'label' => $record->name,
-                        'href' => route('example-plugin.examples.show', $record),
-                        'workspace' => [
-                            'kind' => 'detail',
-                            'title' => $record->name,
-                        ],
-                    ],
-                    'slug' => [
-                        'type' => 'text',
-                        'value' => $record->slug,
-                    ],
-                    'summary' => [
-                        'type' => 'text',
-                        'value' => $record->summary,
-                        'empty' => 'No summary',
-                    ],
-                    'status' => [
-                        'type' => 'status',
-                        'value' => $record->status,
-                    ],
-                ],
-                'actions' => [
-                    [
-                        'label' => 'View',
-                        'href' => route('example-plugin.examples.show', $record),
-                        'method' => 'GET',
-                        'variant' => 'secondary',
-                        'workspace' => [
-                            'kind' => 'detail',
-                            'title' => $record->name,
-                        ],
-                    ],
-                ],
-            ])->values()->all(),
+            'crud' => $this->resource()->indexDefinition()->toArray(),
+            'rows' => $this->resource()->indexRows($records),
             'sidebarPanels' => [
                 [
                     'tone' => 'dark',
@@ -95,32 +48,57 @@ class ExampleRecordController extends Controller
         ]);
     }
 
+    public function create(): Response
+    {
+        return Inertia::render('ExamplePlugin/Records/Create', $this->resource()->createForm()->toArray());
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['required', 'string', 'max:255', 'alpha_dash', Rule::unique('example_plugin_records', 'slug')],
+            'status' => ['required', 'in:active,inactive,archived'],
+            'summary' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $record = ExampleRecord::query()->create($data);
+
+        return redirect()
+            ->route('example-plugin.examples.show', $record)
+            ->with('status', 'Example record created.');
+    }
+
+    public function edit(ExampleRecord $record): Response
+    {
+        return Inertia::render('ExamplePlugin/Records/Edit', $this->resource()->editForm($record)->toArray());
+    }
+
+    public function update(Request $request, ExampleRecord $record): RedirectResponse
+    {
+        WorkspaceVersion::assertCurrent($request, WorkspaceVersion::compose([$record->updated_at]));
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'slug' => ['required', 'string', 'max:255', 'alpha_dash', Rule::unique('example_plugin_records', 'slug')->ignore($record->id)],
+            'status' => ['required', 'in:active,inactive,archived'],
+            'summary' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $record->update($data);
+
+        return redirect()
+            ->route('example-plugin.examples.show', $record)
+            ->with('status', 'Example record updated.');
+    }
+
     public function show(ExampleRecord $record): Response
     {
-        return Inertia::render('ExamplePlugin/Records/Show', [
-            'header' => [
-                'eyebrow' => 'Example Plugin',
-                'heading' => $record->name,
-                'description' => $record->summary,
-                'actions' => [
-                    [
-                        'href' => route('example-plugin.examples.index'),
-                        'label' => 'Back to examples',
-                    ],
-                ],
-            ],
-            'stats' => [
-                ['label' => 'Slug', 'value' => $record->slug],
-                ['label' => 'Status', 'type' => 'status', 'value' => $record->status],
-                ['label' => 'Record ID', 'value' => '#'.$record->id],
-            ],
-            'sidebarPanels' => [
-                [
-                    'tone' => 'light',
-                    'title' => 'Why this exists',
-                    'description' => 'This detail screen shows how a plugin can reuse the same shared header, stat card, and badge patterns as the core app without creating its own design system.',
-                ],
-            ],
-        ]);
+        return Inertia::render('ExamplePlugin/Records/Show', $this->resource()->showPayload($record));
+    }
+
+    protected function resource()
+    {
+        return $this->crudResources->for('example-plugin.records');
     }
 }
