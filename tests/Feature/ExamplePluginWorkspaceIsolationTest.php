@@ -4,6 +4,8 @@ namespace Plugins\ExamplePlugin\Tests\Feature;
 
 use App\Models\Business;
 use App\Models\User;
+use App\Support\Crud\WorkspaceVersion;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Plugins\ExamplePlugin\Models\ExampleRecord;
 use Tests\TestCase;
@@ -127,6 +129,98 @@ class ExamplePluginWorkspaceIsolationTest extends TestCase
             'action' => 'restored',
             'record_id' => (string) $record->id,
         ]);
+    }
+
+    public function test_login_business_selection_and_plugin_crud_pages_work_together(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'owner@example.test',
+            'status' => 'active',
+        ]);
+        $firstBusiness = $this->business('first-business');
+        $selectedBusiness = $this->business('selected-business');
+        $firstBusiness->users()->attach($user->id, ['role' => 'owner']);
+        $selectedBusiness->users()->attach($user->id, ['role' => 'owner']);
+
+        $this->post('/login', [
+            'email' => 'owner@example.test',
+            'password' => 'password',
+        ])->assertRedirect('/dashboard');
+
+        $this->assertAuthenticatedAs($user);
+
+        $this->put('/businesses/current', [
+            'business_id' => $selectedBusiness->id,
+        ])->assertRedirect('/dashboard');
+
+        $this->assertSame($selectedBusiness->id, session('current_business_id'));
+
+        $this->get('/example-plugin/records')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('ExamplePlugin/Records/Index', false));
+
+        $this->get('/example-plugin/records/create')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('ExamplePlugin/Records/Create', false));
+
+        $this->post('/example-plugin/records', [
+            'name' => 'Smoke record',
+            'slug' => 'smoke-record',
+            'status' => 'active',
+            'summary' => 'Created by the assembled smoke flow.',
+        ])->assertRedirect();
+
+        $record = ExampleRecord::query()->whereBelongsTo($selectedBusiness)->sole();
+
+        $this->get("/example-plugin/records/{$record->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('ExamplePlugin/Records/Show', false));
+
+        $this->get("/example-plugin/records/{$record->id}/edit")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('ExamplePlugin/Records/Edit', false));
+    }
+
+    public function test_update_emits_a_mutation_and_rejects_a_stale_version(): void
+    {
+        [$user, $business] = $this->workspaceUser('owner');
+        $record = ExampleRecord::query()->create($this->recordData($business, 'editable'));
+        $version = WorkspaceVersion::compose([$record->updated_at]);
+
+        $this->actingAs($user)
+            ->withSession(['current_business_id' => $business->id])
+            ->put("/example-plugin/records/{$record->id}", [
+                'name' => 'Updated record',
+                'slug' => 'updated-record',
+                'status' => 'active',
+                'summary' => null,
+                'workspace_version' => $version,
+            ])
+            ->assertRedirect("/example-plugin/records/{$record->id}");
+
+        $this->assertDatabaseHas('workspace_mutations', [
+            'business_id' => $business->id,
+            'resource' => 'example-plugin.records',
+            'action' => 'updated',
+            'record_id' => (string) $record->id,
+        ]);
+
+        $staleVersion = WorkspaceVersion::compose([$record->fresh()->updated_at]);
+        Carbon::setTestNow(now()->addSecond());
+        $record->forceFill(['name' => 'Changed elsewhere'])->save();
+        Carbon::setTestNow();
+
+        $this->actingAs($user)
+            ->withSession(['current_business_id' => $business->id])
+            ->from("/example-plugin/records/{$record->id}/edit")
+            ->put("/example-plugin/records/{$record->id}", [
+                'name' => 'Overwritten record',
+                'slug' => 'updated-record',
+                'status' => 'active',
+                'summary' => null,
+                'workspace_version' => $staleVersion,
+            ])
+            ->assertSessionHasErrors('__workspace');
     }
 
     protected function workspaceUser(string $role): array
