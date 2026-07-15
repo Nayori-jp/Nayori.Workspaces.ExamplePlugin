@@ -13,6 +13,11 @@
             "Plugins\\ExamplePlugin\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Plugins\\ExamplePlugin\\Tests\\": "tests/"
+        }
+    },
     "minimum-stability": "stable",
     "prefer-stable": true
 }

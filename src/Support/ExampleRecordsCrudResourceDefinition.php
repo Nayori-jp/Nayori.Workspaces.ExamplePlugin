@@ -54,7 +54,29 @@ class ExampleRecordsCrudResourceDefinition extends CrudResourceDefinition
 
     public function indexRows(iterable $records, array $context = []): array
     {
-        return $this->rowsFromDefinition($this->indexDefinition($context), $records);
+        return $this->rowsFromDefinition(
+            $this->indexDefinition($context),
+            $records,
+            function (array $row, ExampleRecord $record): array {
+                if ($record->status === 'archived') {
+                    $row['actions'][] = IndexAction::make(
+                        'Restore',
+                        route('example-plugin.examples.restore', $record),
+                    )->destructive('Restore this example record?', 'PUT')
+                        ->staleScopes(['example-plugin.records'])
+                        ->toArray($record);
+                } else {
+                    $row['actions'][] = IndexAction::make(
+                        'Archive',
+                        route('example-plugin.examples.destroy', $record),
+                    )->destructive('Archive this example record?')
+                        ->staleScopes(['example-plugin.records'])
+                        ->toArray($record);
+                }
+
+                return $row;
+            },
+        );
     }
 
     public function createForm(array $context = []): FormDefinition
