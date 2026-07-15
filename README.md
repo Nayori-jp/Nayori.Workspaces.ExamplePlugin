@@ -23,3 +23,5 @@ The example uses status-based lifecycle management: deleting from the CRUD UI
 sets the record to `archived`, and restore returns it to `active`. Create,
 update, archive, and restore operations emit the shared workspace mutation
 payload. Edit updates also require the shared `workspace_version` value.
+
+Release history and Core compatibility are recorded in [CHANGELOG.md](CHANGELOG.md).
