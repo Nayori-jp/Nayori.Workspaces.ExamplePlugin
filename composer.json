@@ -7,7 +7,7 @@
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0",
-        "nayori/dashboard-core": "^0.1.0"
+        "nayori/dashboard-core": "^0.1.40"
     },
     "autoload": {
         "psr-4": {

@@ -1,5 +1,6 @@
 <script setup>
 import FormPage from '@crud/FormPage.vue';
+import FormActions from '@ui/FormActions.vue';
 import { useWorkspaceForm } from '@workspace/use-workspace-form';
 
 const props = defineProps({
@@ -25,5 +26,9 @@ function submit() {
         :cancel-href="routes.index"
         submit-label="Save record"
         :on-submit="submit"
-    />
+    >
+        <template #actions="actionProps">
+            <FormActions v-bind="actionProps" />
+        </template>
+    </FormPage>
 </template>

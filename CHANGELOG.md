@@ -2,6 +2,21 @@
 
 All notable changes to Nayori Workspaces ExamplePlugin are documented here.
 
+## [0.1.1] - 2026-07-22
+
+### Changed
+
+- Create and edit forms explicitly compose the shared `@ui/FormActions.vue`
+  primitive through the Core `FormPage` action slot
+- The reference plugin continues to inherit field rendering, validation,
+  responsive layout, and workspace behavior from shared Core components
+
+### Compatibility
+
+- Nayori Workspaces Core `^0.1.40`
+- PHP `^8.2`
+- Laravel `^12.0`
+
 ## [0.1.0] - 2026-07-16
 
 Initial Plugin SDK v1 reference release.
